@@ -1,6 +1,15 @@
 Team Member:
+Wei-Chieh, Tseng; 
+Cheng-Lun, Lee;
+
 
 Dataset:
+player data from CPBL(baseball) 
+  - variables are mainly numerical.
+  - 164 players
+  - displays performance of CPBL players in 2025
+  - we will use the whole dataset, but will drop some variable that can imply by others.
+  - the data need to be cleaned. We'll drop some noise data.
 
 To-Do:
 
