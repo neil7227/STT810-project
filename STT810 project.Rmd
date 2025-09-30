@@ -1,0 +1,29 @@
+---
+title: "STT 810 project"
+output: pdf_document
+date: "2025-09-30"
+---
+
+install  
+沒有的記得跑一下  
+```{r}
+install.packages("readxl")
+```
+init
+初始環境
+```{r}
+library(readxl)
+```
+
+input data  
+載入資料  
+```{r}
+data <- read_excel("CTBC_hitter.xlsx")
+```
+
+first view  
+show 資料  
+```{r}
+head(data)
+```
+
