@@ -1,7 +1,7 @@
 Team Member:
 Wei-Chieh, Tseng; 
 Cheng-Lun, Lee;
-
+Yuan-Long, Hong
 
 Dataset:
 player data from CPBL(baseball) 
@@ -9,9 +9,14 @@ player data from CPBL(baseball)
   - 164 players
   - displays performance of CPBL players in 2025
   - we will use the whole dataset, but will drop some variable that can imply by others.
-  - the data need to be cleaned. We'll drop some noise data.
+  - the data need to be cleaned. We'll drop some noise data and fix missing values.
 
 To-Do:
+  - This project will include data exploration and making a regression model to predict baseball players' performance.
+  - Rather than follow a tutorial, we prefer to explore by ourselves. But we'll learn some method from several tutorial and make them fit our project.
+  - We won't change the dataset, but we'll try as much model as we can to find the best one. 
 
 Course Topic(will show):
-
+linear model
+logistic model
+...
