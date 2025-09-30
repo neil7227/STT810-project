@@ -20,7 +20,7 @@ library(corrplot)
 input data  
 載入資料  
 ```{r}
-data <- read_excel("CTBC_hitter.xlsx")
+data <- read_excel("CPBL_hitter.xlsx")
 ```
 
 first view  
