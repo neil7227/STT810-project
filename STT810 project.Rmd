@@ -7,12 +7,14 @@ date: "2025-09-30"
 install  
 沒有的記得跑一下  
 ```{r}
-install.packages("readxl")
+#install.packages("readxl")
+#install.packages("corrplot")
 ```
 init
 初始環境
 ```{r}
 library(readxl)
+library(corrplot)
 ```
 
 input data  
@@ -25,5 +27,38 @@ first view
 show 資料  
 ```{r}
 head(data)
+summary(data)
+```
+
+correlatoin
+```{r fig.width=10, fig.height=10}
+#選出數值型變數
+data_num <- data[, sapply(data, is.numeric)]
+
+#將corr存為矩陣
+data_corr_matrix <- cor(data_num, use = "complete.obs")
+#cat(data_corr_matrix)
+
+#plot
+corrplot(data_corr_matrix, 
+         method = "color", #顏色表示相關性
+         col=colorRampPalette(c("#5D5DFF","white","#FF5C5C"))(200), #修改顏色
+         addCoef.col = "black", #將數值放在格子上
+         number.cex = 0.8, #方格上數字大小
+         tl.col = "black" #標籤顏色
+         )
+```
+
+visualization
+```{r}
+#觀察每個變數
+for(col_name in names(data_num)) {
+  hist(data_num[[col_name]],
+       main = paste("Histogram of", col_name),
+       xlab = col_name,
+       col = "lightblue",
+       breaks = 40
+       )
+}
 ```
 
