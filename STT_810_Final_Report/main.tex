@@ -1,0 +1,534 @@
+\documentclass[12pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath, amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{setspace}
+\usepackage{caption}
+\usepackage{float}
+\usepackage{array}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue,
+  urlcolor=blue,
+  citecolor=blue
+}
+
+\doublespacing
+
+\title{STT 810 Project:\\
+Predicting CPBL Hitter Performance}
+\author{Wei-Chieh, Tseng: 181608938 \and Draco Hong: 181591665 \and Cheng-Lun Lee: 181487980}
+\date{\today}
+
+\begin{document}
+\maketitle
+\newpage
+
+\begin{abstract}
+This project studies which offensive statistics matter most for hitters
+in the Chinese Professional Baseball League (CPBL).
+We use OPS+ as our main measure of hitting performance and combine two
+modeling approaches.
+First, we treat OPS+ as a continuous response and fit robust regression
+(Huber regression), with and without principal component analysis (PCA),
+to handle outliers and multicollinearity.
+Second, we define a binary ``elite'' indicator based on OPS+ and fit
+logistic regression models using plate discipline and batted-ball
+statistics such as strikeout rate, BABIP, and balls-in-play rate.
+With four process-based predictors (PA, K\_pct, BABIP, BIP\_pct), the
+logistic model reaches about 87\% test accuracy and a test AUC around
+0.93 on a hold-out set, and about 89\% accuracy on the full sample,
+suggesting that low strikeout rate and high BABIP are strong markers of
+elite CPBL hitters.
+The robust regression results are consistent with this picture and also
+highlight slugging percentage (SLG) as a key driver of OPS+.
+\end{abstract}
+
+\newpage
+
+\tableofcontents
+\newpage
+
+\section{Introduction}
+
+OPS+ is a standard sabermetric measure that summarizes a hitter's on-base
+and slugging performance, adjusted for league and park factors.
+In this project, we focus on batters from the Chinese Professional
+Baseball League (CPBL) and ask two related questions:
+\begin{enumerate}
+  \item Which offensive statistics are most strongly associated with OPS+?
+  \item Can we build reasonably accurate models that predict or classify
+        hitter performance using process-based statistics such as plate
+        discipline and batted-ball metrics?
+\end{enumerate}
+
+To address these questions, we use CPBL data from the 2024 and 2025
+seasons and apply two complementary approaches.
+First, we treat OPS+ as a continuous outcome and fit robust regression
+models (Huber regression), with and without dimensionality reduction via
+principal component analysis (PCA).
+Second, we convert OPS+ to a binary ``elite'' indicator and fit logistic
+regression models based on plate discipline and batted-ball variables.
+
+Our code and cleaned data are available in a public GitHub repository:
+\begin{center}
+  \href{https://github.com/neil7227/STT810-project/tree/main}{\texttt{https://github.com/neil7227/STT810-project/tree/main}}
+\end{center}
+
+\section{Data and Preprocessing}
+
+\subsection{Data source}
+
+We use CPBL batter data from the 2024 and 2025 seasons, obtained from a
+public baseball statistics website (Robas, \textit{The Baseball Revolution}).
+The raw dataset contains basic batting statistics for 307 players and 18
+columns, including:
+\begin{itemize}
+  \item Plate appearances (PA), at-bats, hits, doubles, triples, home runs.
+  \item Walks, strikeouts, hit-by-pitch, sacrifice flies.
+  \item Summary rate statistics such as batting average (AVG),
+        on-base percentage (OBP), slugging percentage (SLG), OPS, and OPS+.
+\end{itemize}
+
+\subsection{Cleaning and feature construction}
+
+We performed the following preprocessing steps (also documented in our
+notebooks and cleaned CSV files in the GitHub repo):
+\begin{enumerate}
+  \item Removed duplicate or redundant columns such as OPS (since OPS+
+        is already included) and other highly collinear summary stats.
+  \item Ensured that numeric variables were stored as numeric types and
+        handled obvious missing or inconsistent entries.
+  \item Excluded players with very few plate appearances to avoid noise
+        from extremely small samples.
+        For the logistic regression analysis we kept hitters with at
+        least 50 PA, yielding roughly 100 players.
+  \item Constructed process-based variables, for example:
+        \begin{itemize}
+          \item Walk rate: $\text{BB\_pct} = \frac{\text{BB}}{\text{PA}}$.
+          \item Strikeout rate: $\text{K\_pct} = \frac{\text{SO}}{\text{PA}}$.
+          \item Balls-in-play rate: BIP\_pct.
+          \item Batting average on balls in play (BABIP).
+          \item Put-away rate in two-strike counts (PutAway\_pct).
+        \end{itemize}
+  \item Kept OPS+ as the primary performance outcome.
+\end{enumerate}
+
+\begin{table}[H]
+\centering
+\caption{Key variables used in the analysis.}
+\label{tab:variables}
+\begin{tabular}{>{\raggedright}p{0.25\textwidth} p{0.65\textwidth}}
+\toprule
+Variable & Description \\
+\midrule
+OPS\_plus    & League- and park-adjusted OPS index (100 = league average) \\
+PA           & Plate appearances \\
+BB\_pct      & Walk rate (BB / PA) \\
+K\_pct       & Strikeout rate (SO / PA) \\
+BABIP        & Batting average on balls in play \\
+BIP\_pct     & Batted-ball-in-play rate \\
+PutAway\_pct & Two-strike put-away rate \\
+SLG          & Slugging percentage \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Exploratory analysis}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.9\textwidth]{word_fig01_data_head.png}
+  \caption{Head of the CPBL batter dataset (example rows).}
+  \label{fig:data_head}
+\end{figure}
+
+We then restricted to numeric columns and computed the correlation matrix.
+From the logistic-regression notebook we obtain the following correlation
+heatmap:
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.9\textwidth]{logit_corr_heatmap.png}
+  \caption{Correlation heatmap of numeric features in the CPBL dataset.}
+  \label{fig:correlation}
+\end{figure}
+
+The heatmap shows that slugging percentage (SLG) and several batted-ball
+variables are strongly associated with OPS+, which motivates their use
+in the robust regression model.
+For the logistic regression model, we focus on process-based plate
+discipline and batted-ball rates instead of directly using OPS+ or SLG
+as predictors.
+
+\section{Methods}
+
+\subsection{Robust regression for continuous OPS+}
+
+\subsubsection{Model choice}
+
+Baseball data often contain outliers, for example players with very few
+plate appearances or unusual one-year spikes.
+Ordinary least squares (OLS) regression can be sensitive to these extreme
+observations, so we use Huber regression to predict OPS+ from a set of
+offensive statistics and we compare models based on the original features
+and on PCA components.
+
+Let $y_i$ denote the OPS+ of player $i$ and $\mathbf{x}_i$ a vector of
+predictors (e.g., OBP, SLG, BB\_pct, K\_pct).
+The Huber regression solves
+\[
+  \min_{\beta_0, \boldsymbol{\beta}} \sum_{i=1}^n \rho_\delta
+  \bigl(y_i - \beta_0 - \mathbf{x}_i^\top \boldsymbol{\beta}\bigr),
+\]
+where $\rho_\delta(\cdot)$ is the Huber loss with tuning parameter
+$\delta$: it behaves like squared loss for small residuals and absolute
+loss for large residuals.
+
+\subsubsection{PCA-based dimension reduction}
+
+We first standardize the main batting statistics and apply PCA to them.
+Instead of only looking at the variance explained by each component, we
+fit a sequence of Huber regression models using the first
+\(k = 1,\dots,6\) principal components and record several model
+diagnostics (RMSE, \(R^2\), adjusted \(R^2\), and AIC).
+This allows us to see how predictive performance changes as we increase
+the number of retained components.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.9\textwidth]{word_fig04_pca_model_metrics.png}
+  \caption{Model diagnostics (RMSE, $R^2$, adjusted $R^2$, and AIC) for
+  Huber regression models using the first 1--6 principal components.}
+  \label{fig:pca_model_metrics}
+\end{figure}
+
+Figure~\ref{fig:pca_model_metrics} shows that RMSE and AIC drop sharply
+when moving from one to two components and continue to improve up to
+about five components, while \(R^2\) and adjusted \(R^2\) quickly level
+off close to 0.99.
+Based on this plot, we keep the first five principal components in the
+PCA-based Huber model.
+
+\subsection{Logistic regression for elite vs.\ non-elite hitters}
+
+\subsubsection{Outcome and predictors}
+
+For logistic regression we define a binary outcome:
+\[
+  \text{elite}_i =
+  \begin{cases}
+    1, & \text{if } \text{OPS+}_i \geq 110, \\
+    0, & \text{if } \text{OPS+}_i < 110.
+  \end{cases}
+\]
+We restrict to hitters with at least 50 PA (about 100 players).
+
+We use process-based predictors from \texttt{cpbl\_logistic.ipynb}:
+\begin{itemize}
+  \item PA
+  \item BB\_pct
+  \item K\_pct
+  \item BABIP
+  \item BIP\_pct
+  \item PutAway\_pct
+\end{itemize}
+All predictors are standardized before modeling.
+
+\subsubsection{Two implementations}
+
+We use two complementary implementations:
+\begin{enumerate}
+  \item \textbf{scikit-learn} \texttt{LogisticRegression} with a 70/30
+        train--test split to evaluate generalization performance.
+  \item \textbf{statsmodels} \texttt{Logit} on the full sample, first with
+        all six predictors and then a reduced model with
+        \[
+          \{\text{PA}, \text{K\_pct}, \text{BABIP}, \text{BIP\_pct}\}
+        \]
+        selected using $p$-values.
+\end{enumerate}
+
+We report training and test accuracy, confusion matrices, classification
+reports, and ROC/AUC.
+
+\section{Results}
+
+\subsection{Robust regression results}
+
+\subsubsection{Original data vs.\ PCA representation}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.85\textwidth]{word_fig02_origin_plot.png}
+  \caption{Robust regression using original features (example fit).}
+  \label{fig:origin_robust}
+\end{figure}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.85\textwidth]{word_fig05_pca_huber.png}
+  \caption{Robust regression using PCA (95\% variance) features.}
+  \label{fig:pca_robust}
+\end{figure}
+
+The PCA-based model achieves similar or better performance than the model
+on original features, while using fewer predictors and showing more
+stable residuals.
+
+\subsubsection{Effect of log transformation}
+
+We also experimented with a log transformation of OPS+ for robust
+regression.
+However, the log-transformed model produced worse fits and did not
+improve interpretability, so we kept OPS+ on its original scale.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.8\textwidth]{word_fig06_log_plot.png}
+  \caption{Effect of log-transforming OPS+ in robust regression.}
+  \label{fig:log_transform}
+\end{figure}
+
+\subsubsection{Comparison and feature importance}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.8\textwidth]{word_fig07_compare_models.png}
+  \caption{Comparison of robust regression models (original vs.\ PCA vs.\ log).}
+  \label{fig:robust_compare}
+\end{figure}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.4\textwidth]{word_fig08_feature_weights.png}
+  \caption{Estimated feature weights from the robust regression model.}
+  \label{fig:robust_features}
+\end{figure}
+
+The feature-weight plot indicates that slugging percentage (SLG) is one
+of the most important predictors of OPS+, which is consistent with
+baseball intuition: extra-base hits and power strongly drive OPS+.
+
+
+
+\subsection{Logistic regression results}
+
+\subsubsection{Model building and variable selection}
+
+We start from a full logistic regression model with all six process-based
+predictors:
+\[
+  \{\text{PA}, \text{BB\_pct}, \text{K\_pct}, \text{BABIP},
+    \text{BIP\_pct}, \text{PutAway\_pct}\}.
+\]
+Using \texttt{statsmodels} \texttt{Logit} with standardized predictors and an
+intercept, the full model attains a high pseudo-$R^2$ of about 0.64 and the
+likelihood ratio test strongly rejects the null of no covariate effects.
+The coefficient table in Figure~\ref{fig:logit_full_summary} shows that PA,
+K\_pct, BABIP and BIP\_pct are important, while BB\_pct and PutAway\_pct have
+much larger $p$-values (around 0.17 and 0.74).
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.9\textwidth]{logit_full_model_summary.png}
+  \caption{Summary output for the full logit model with six process-based predictors.}
+  \label{fig:logit_full_summary}
+\end{figure}
+
+Based on these $p$-values, we fit a reduced logit model that keeps only
+\[
+  \{\text{PA}, \text{K\_pct}, \text{BABIP}, \text{BIP\_pct}\}.
+\]
+The reduced model has a pseudo-$R^2$ of about 0.61, slightly lower than the
+full model but still high, and it achieves similar log-likelihood and better
+parsimony.
+Dropping BB\_pct and PutAway\_pct therefore does not meaningfully hurt the fit
+but makes the model simpler and easier to interpret.
+This four-variable specification is the one we use for both the train--test
+evaluation and the final interpretation; its summary output is shown in
+Figure~\ref{fig:logit_reduced_summary}.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.9\textwidth]{logit_reduced_model_summary.png}
+  \caption{Summary output for the reduced logit model with four predictors
+  (PA, K\_pct, BABIP, BIP\_pct).}
+  \label{fig:logit_reduced_summary}
+\end{figure}
+
+\subsubsection{Train--test performance (scikit-learn, 4 features)}
+
+Using the reduced feature set $\{\text{PA}, \text{K\_pct}, \text{BABIP},
+\text{BIP\_pct}\}$ and a 70/30 train--test split, we fit a
+\texttt{LogisticRegression} model in \texttt{scikit-learn} with
+\texttt{max\_iter = 1000} and \texttt{class\_weight = "balanced"}.
+This model yields:
+
+\begin{itemize}
+  \item Training accuracy: about 0.83.
+  \item Test accuracy: about 0.87.
+  \item Test AUC: around 0.93.
+\end{itemize}
+
+On the 30\% test set, the confusion matrix (rows = true class, columns
+= predicted class) from the notebook is:
+
+\begin{table}[H]
+\centering
+\caption{Test-set confusion matrix (scikit-learn logistic regression, 4 features).}
+\label{tab:cm_test}
+\begin{tabular}{c|cc}
+\toprule
+ & Predicted 0 & Predicted 1 \\
+\midrule
+True 0 & 19 & 2 \\
+True 1 & 2  & 7 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+This corresponds to correctly classifying most non-elite hitters and the
+majority of elite hitters.
+The ROC curve on the test set is shown in Figure~\ref{fig:logit_roc_test}.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.8\textwidth]{logit_roc_test_4feat.png}
+  \caption{ROC curve for the reduced logistic regression model on the test set.}
+  \label{fig:logit_roc_test}
+\end{figure}
+
+\subsubsection{Full-sample inference (statsmodels reduced logit)}
+
+For more detailed inference, we return to \texttt{statsmodels} and fit the
+reduced logit model with the same four predictors on the full sample of about
+100 hitters.
+Using a probability threshold of 0.5 to classify elite vs.\ non-elite, the
+confusion matrix is:
+
+\begin{table}[H]
+\centering
+\caption{Full-sample confusion matrix (statsmodels reduced logit).}
+\label{tab:cm_full}
+\begin{tabular}{c|cc}
+\toprule
+ & Predicted 0 & Predicted 1 \\
+\midrule
+True 0 & 66 & 5 \\
+True 1 & 6  & 23 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+This corresponds to an in-sample accuracy close to 0.89.
+The ROC curve in Figure~\ref{fig:logit_roc_full} shows that the in-sample
+AUC is also above 0.9, indicating strong separation between elite and
+non-elite hitters on the full data.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.8\textwidth]{logit_roc_full_reduced_logit.png}
+  \caption{ROC curve for the reduced statsmodels logit on the full sample.}
+  \label{fig:logit_roc_full}
+\end{figure}
+
+We also convert the estimated coefficients into odds ratios via
+\[
+\text{OR}_j = \exp(\hat{\beta}_j),
+\]
+so that they can be interpreted on the standardized scale:
+\begin{itemize}
+  \item A one-standard-deviation increase in PA multiplies the odds of
+        being elite by a factor larger than 1.
+  \item A one-standard-deviation increase in K\_pct substantially reduces
+        the odds.
+  \item A one-standard-deviation increase in BABIP multiplies the odds by
+        a large factor.
+  \item Higher BIP\_pct is associated with lower odds of being elite.
+\end{itemize}
+
+\section{Discussion}
+
+The robust regression and logistic regression analyses tell a consistent
+story about what characterizes strong CPBL hitters.
+
+From the robust regression analysis, slugging percentage (SLG) stands out
+as a key driver of OPS+, which matches basic baseball intuition: power
+and extra-base hits matter a lot.
+The PCA-based model shows that we can compress much of the information in
+the batting statistics into a small number of components without losing
+too much predictive power, and that this can also stabilize the fit in
+the presence of outliers.
+
+The logistic regression analysis deliberately uses process-based
+statistics that do not trivially encode OPS+ itself.
+It shows that:
+\begin{itemize}
+  \item Low strikeout rates (low K\_pct) and high BABIP are both strong
+        predictors of being an elite hitter.
+  \item Plate appearances (PA) are positively associated with elite
+        status, which likely reflects both talent and opportunity.
+  \item A high BIP\_pct is associated with lower odds of being elite,
+        possibly because simply putting more balls in play without
+        strong plate discipline or power does not create enough
+        high-value outcomes such as walks and extra-base hits.
+\end{itemize}
+
+On the test set, the logistic regression model still achieves high AUC
+and good accuracy, which suggests that these four process-based features
+generalize reasonably well beyond the training sample.
+
+\section{Conclusion and Future Work}
+
+To sum up, this STT 810 project shows that:
+\begin{enumerate}
+  \item Robust regression with PCA provides a stable and interpretable
+        model for continuous OPS+, and highlights the central role of
+        slugging percentage and related power metrics.
+  \item Logistic regression based on process-based statistics
+        (PA, K\_pct, BABIP, BIP\_pct) can successfully distinguish
+        elite from non-elite CPBL hitters, with good out-of-sample
+        performance and high AUC.
+\end{enumerate}
+
+Several extensions are natural:
+\begin{itemize}
+  \item Add more seasons and data sources to increase sample size and
+        check whether the patterns we see here are stable over time.
+  \item Use cross-validation for more systematic model selection and
+        tuning.
+  \item Compare with regularized and non-linear models
+        (for example, Lasso, random forests, gradient boosting)
+        as benchmarks.
+  \item Extend the analysis to position-specific models or to pitcher
+        performance metrics.
+\end{itemize}
+
+All code, intermediate data, and notebooks for this project are available at:
+\begin{center}
+  \href{https://github.com/neil7227/STT810-project/tree/main}{\texttt{https://github.com/neil7227/STT810-project/tree/main}}
+\end{center}
+
+\section*{References}
+
+\begin{thebibliography}{9}
+
+\bibitem{robas}
+  Robas (\textit{The Baseball Revolution}) CPBL batter statistics, 2024--2025 seasons.
+
+\bibitem{scikit}
+  Scikit-learn developers.
+  \textit{Scikit-learn User Guide: Linear and Logistic Regression.}
+
+\bibitem{statsmodels}
+  Statsmodels developers.
+  \textit{Statsmodels User Guide: Discrete Choice Models.}
+
+\end{thebibliography}
+
+\end{document}
