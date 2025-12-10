@@ -165,19 +165,16 @@ For the logistic regression model, we focus on process-based plate
 discipline and batted-ball rates instead of directly using OPS+ or SLG
 as predictors.
 
+
 \section{Methods}
-
 \subsection{Robust regression for continuous OPS+}
-
 \subsubsection{Model choice}
-
 Baseball data often contain outliers, for example players with very few
 plate appearances or unusual one-year spikes.
 Ordinary least squares (OLS) regression can be sensitive to these extreme
 observations, so we use Huber regression to predict OPS+ from a set of
 offensive statistics and we compare models based on the original features
 and on PCA components.
-
 Let $y_i$ denote the OPS+ of player $i$ and $\mathbf{x}_i$ a vector of
 predictors (e.g., OBP, SLG, BB\_pct, K\_pct).
 The Huber regression solves
@@ -190,12 +187,11 @@ $\delta$: it behaves like squared loss for small residuals and absolute
 loss for large residuals.
 
 \subsubsection{PCA-based dimension reduction}
-
 We first standardize the main batting statistics and apply PCA to them.
 Instead of only looking at the variance explained by each component, we
 fit a sequence of Huber regression models using the first
-\(k = 1,\dots,6\) principal components and record several model
-diagnostics (RMSE, \(R^2\), adjusted \(R^2\), and AIC).
+$k = 1,\dots,6$ principal components and record several model
+diagnostics (RMSE, $R^2$, adjusted $R^2$, and AIC).
 This allows us to see how predictive performance changes as we increase
 the number of retained components.
 
@@ -209,15 +205,13 @@ the number of retained components.
 
 Figure~\ref{fig:pca_model_metrics} shows that RMSE and AIC drop sharply
 when moving from one to two components and continue to improve up to
-about five components, while \(R^2\) and adjusted \(R^2\) quickly level
+about five components, while $R^2$ and adjusted $R^2$ quickly level
 off close to 0.99.
 Based on this plot, we keep the first five principal components in the
 PCA-based Huber model.
 
 \subsection{Logistic regression for elite vs.\ non-elite hitters}
-
 \subsubsection{Outcome and predictors}
-
 For logistic regression we define a binary outcome:
 \[
   \text{elite}_i =
@@ -227,7 +221,6 @@ For logistic regression we define a binary outcome:
   \end{cases}
 \]
 We restrict to hitters with at least 50 PA (about 100 players).
-
 We use process-based predictors from \texttt{cpbl\_logistic.ipynb}:
 \begin{itemize}
   \item PA
@@ -240,7 +233,6 @@ We use process-based predictors from \texttt{cpbl\_logistic.ipynb}:
 All predictors are standardized before modeling.
 
 \subsubsection{Two implementations}
-
 We use two complementary implementations:
 \begin{enumerate}
   \item \textbf{scikit-learn} \texttt{LogisticRegression} with a 70/30
@@ -252,9 +244,46 @@ We use two complementary implementations:
         \]
         selected using $p$-values.
 \end{enumerate}
-
 We report training and test accuracy, confusion matrices, classification
 reports, and ROC/AUC.
+
+\subsection{Ridge regression with independent features}
+\subsubsection{Model choice}
+To avoid circularity in predicting OPS+ from statistics that are directly
+used in its calculation, we fit a Ridge regression model using only
+process-based predictors.
+Ridge regression applies an $L_2$ penalty to the coefficient estimates,
+which helps prevent overfitting and handles multicollinearity among
+predictors.
+Let $y_i$ denote the OPS+ of player $i$ and $\mathbf{x}_i$ a vector of
+independent features:
+\[
+  \mathbf{x}_i = (\text{PA}, \text{AVG}, \text{BABIP}, \text{BIP\_pct},
+  \text{BB\_pct}, \text{BB/K}, \text{K\_pct}, \text{PutAway\_pct})^\top.
+\]
+The Ridge regression solves
+\[
+  \min_{\beta_0, \boldsymbol{\beta}} \sum_{i=1}^n
+  \bigl(y_i - \beta_0 - \mathbf{x}_i^\top \boldsymbol{\beta}\bigr)^2
+  + \alpha \|\boldsymbol{\beta}\|_2^2,
+\]
+where $\alpha > 0$ is a penalty parameter that shrinks coefficient
+estimates toward zero.
+We standardize all predictors before modeling and use $\alpha = 1.0$.
+
+\subsubsection{Feature selection and validation}
+We exclude OBP, SLG, wOBA, RC, and ISO from the predictor set because
+these statistics are components or direct transformations of OPS+.
+Using only the eight independent features listed above allows us to
+assess how well we can predict OPS+ from underlying process metrics
+(contact rate, walk rate, strikeout rate, etc.) rather than outcome
+measures.
+We split the data into 80\% training and 20\% test sets (random seed 42)
+and evaluate the model via 5-fold cross-validation on the training set.
+Performance metrics include RMSE, MAE, and $R^2$ on both the training
+and test sets.
+This approach yields a test-set $R^2 \approx 0.97$, demonstrating that
+process-based statistics alone provide strong predictive power for OPS+.
 
 \section{Results}
 
@@ -451,6 +480,78 @@ so that they can be interpreted on the standardized scale:
         a large factor.
   \item Higher BIP\_pct is associated with lower odds of being elite.
 \end{itemize}
+
+
+\subsection{Ridge regression results}
+
+\subsubsection{Model performance and validation}
+
+The Ridge regression model using eight independent features achieves strong
+predictive performance on both training and test sets.
+With an 80/20 train--test split and 5-fold cross-validation on the training
+set, the model yields:
+
+\begin{itemize}
+  \item Training $R^2$: 0.972
+  \item Test $R^2$: 0.968
+  \item Training RMSE: 5.88
+  \item Test RMSE: 6.30
+  \item Training MAE: 4.48
+  \item Test MAE: 4.82
+  \item Cross-validation $R^2$ (mean): 0.965
+\end{itemize}
+
+The test-set $R^2$ of 0.968 demonstrates that process-based statistics alone
+can predict OPS+ with high accuracy, without relying on outcome measures that
+are directly incorporated into the OPS+ calculation.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.9\textwidth]{ridge_regression_independent.png}
+  \caption{Ridge regression diagnostic plots using independent features:
+  predicted vs.\ actual OPS+ (top left), residuals vs.\ predicted values
+  (top right), top 10 feature coefficients (bottom left), and distribution
+  comparison (bottom right).}
+  \label{fig:ridge_results}
+\end{figure}
+
+Figure~\ref{fig:ridge_results} shows the model diagnostics.
+The predicted vs.\ actual plot (top left) demonstrates strong agreement
+between predictions and observed OPS+ values, with points clustering
+tightly around the diagonal reference line.
+The residual plot (top right) shows no clear patterns, suggesting that
+the model assumptions are reasonably satisfied.
+
+\subsubsection{Feature importance and interpretation}
+
+The coefficient plot (bottom left of Figure~\ref{fig:ridge_results})
+reveals which process-based statistics have the strongest associations
+with OPS+:
+
+\begin{itemize}
+  \item BABIP has the largest positive coefficient, indicating that
+        batting average on balls in play is the strongest predictor
+        of OPS+ among the independent features.
+  \item AVG also shows a strong positive coefficient, consistent with
+        the importance of making contact and getting hits.
+  \item K\_pct has a substantial negative coefficient, confirming that
+        high strikeout rates are detrimental to overall offensive
+        production.
+  \item BB\_pct and BB/K both have positive coefficients, highlighting
+        the value of plate discipline and drawing walks.
+  \item PA shows a positive association, likely reflecting both playing
+        time and underlying talent.
+\end{itemize}
+
+The distribution comparison (bottom right of Figure~\ref{fig:ridge_results})
+shows that the predicted OPS+ values closely match the empirical
+distribution of actual OPS+ in the test set, further validating the
+model's ability to capture the range and variation in hitter performance.
+
+These results complement the logistic regression analysis by showing that
+the same underlying process metrics (contact rate, plate discipline,
+balls-in-play outcomes) that distinguish elite from non-elite hitters
+also provide strong linear predictions of the continuous OPS+ scale.
 
 \section{Discussion}
 
