@@ -1,6 +1,28 @@
 # STT810-project
-To run the project, 
-You can run the Data_Base_Clean.ipynb to clean the origin data. 
-It will new a base_cleaned_data.csv (already exist).
-Then you can run Robust_Model.ipynb, cpbl_logistic.ipynb or ridge_regression_model.py to see each model performance.
-You can also open STT_810_Final_Report.pdf to see the whole project result.
+package requirement:
+pandas
+numpy
+matplotlib
+seaborn
+scikit-learn
+statsmodels
+
+Data_Base_Clean.ipynb
+TO-DO: basic processing for raw data.
+input: CPBL_batter_2024.xlsx, CPBL_batter_2025.xlsx
+output: base_clean_data.csv
+
+Robust_Model.ipynb
+TO-DO: create robust models to predict OPS+ and compare the model efficiency
+input: base_clean_data.csv
+output: model performance and plots
+
+ridge_regression_model.ipynb
+TO-DO: create ridge models to predict OPS+ and compare the model efficiency
+input: base_clean_data.csv
+output: model performance and plots
+
+cpbl_logistic.ipynb
+TO-DO: create a model to predict high OPS+ players and compare the model efficiency
+input: CPBL_batter_2025.xlsx
+output: model performance
